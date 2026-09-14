@@ -42,38 +42,30 @@ func main() {
 	dbQueries := database.New(db)
 
 	var cState state
-	var appCmds = commands{
-		cmdMap: map[string]func(*state, command) error{
-			"login": handlerLogin,
-			"register": handlerRegister,
-			"reset": handlerDeleteUsers,
-		},
+	var appCmds = commands {
+		cmdMap: make(map[string]func(*state, command) error),
 	}
 
-
+	appCmds.register("login", handlerLogin)
+	appCmds.register("register", handlerRegister)
+	appCmds.register("reset", handlerDeleteUsers)
+	appCmds.register("users", handlerGetUsers)
 	log.Printf("%+v\n", appCmds)
 
 
 	cState.cfg = readConfig()
 	cState.db = dbQueries
 
-	//log.Printf("%+v\n", cState.cfg)
-
 	cmd := command {
-		cmd: cmdEntered,
+		name: cmdEntered,
 		args: argsEntered,
 	}
 
-	f, ok := appCmds.cmdMap[cmdEntered]
-	if !ok {
-		log.Fatal("given command \"", cmdEntered, "\" not found")
-	}
-	if err := f(&cState, cmd); err != nil {
+	if err := appCmds.run(&cState, cmd); err != nil {
 		log.Fatal(err)
 	}
 
 }
-
 
 func readConfig() *gtc.Config {
 	config, err := gtc.Read()
