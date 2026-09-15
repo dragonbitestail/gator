@@ -13,6 +13,7 @@ const confFile = ".gatorconfig.json"
 type Config struct {
 	DbURL string `json:"db_url"`
 	CurrentUserName string `json:"current_user_name"`
+	CurrentUserId string `json:"current_user_id"`
 }
 
 func Read() (*Config, error) {
@@ -37,7 +38,7 @@ func Read() (*Config, error) {
 	return &config, nil
 }
 
-func (c *Config) SetUser(user string) error {
+func (c *Config) SetUser(user string, id string) error {
 
 	fullPath, err := getFullConfigPath()
 	if err != nil {
@@ -53,6 +54,7 @@ func (c *Config) SetUser(user string) error {
 	var buffer bytes.Buffer
 
 	c.CurrentUserName = user
+	c.CurrentUserId = id
 
 	json.NewEncoder(&buffer).Encode(c)
 

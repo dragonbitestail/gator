@@ -1,7 +1,6 @@
 package main
 
 import (
-//    "fmt"
 		"log"
 		"os"
 		"database/sql"
@@ -9,7 +8,6 @@ import (
 		"gator/pkg/database"
 		gtc "gator/pkg/config"
 )
-
 
 type state struct {
 	db *database.Queries
@@ -50,6 +48,9 @@ func main() {
 	appCmds.register("register", handlerRegister)
 	appCmds.register("reset", handlerDeleteUsers)
 	appCmds.register("users", handlerGetUsers)
+	appCmds.register("agg", handlerAgg)
+	appCmds.register("addfeed", handlerAddFeed)
+	appCmds.register("feeds", handlerGetFeeds)
 	log.Printf("%+v\n", appCmds)
 
 

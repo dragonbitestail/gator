@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"net/url"
 	"github.com/google/uuid"
+
 	"gator/pkg/database"
 )
 
@@ -53,13 +55,13 @@ func handlerLogin(s *state, cmd command) error {
 		Valid: true,
 	}
 
-	_, err := s.db.GetUser(context.Background(), uName)
+	u, err := s.db.GetUser(context.Background(), uName)
 	if err != nil {
 		fmt.Printf("Could not login user \"%s\". Not registered?\n", uName.String)
 		return err
 	}
 
-	if err := s.cfg.SetUser(cmd.args[0]); err != nil {
+	if err := s.cfg.SetUser(u.Name.String, u.ID.String()); err != nil {
 		return err
 	}
 
@@ -70,10 +72,6 @@ func handlerRegister(s *state, cmd command) error {
 
 	if len(cmd.args) < 1 {
 		return errors.New("the register handler expects a single argument, the new username")
-	}
-
-	if err := s.cfg.SetUser(cmd.args[0]); err != nil {
-		return err
 	}
 
 	uParams := database.CreateUserParams{
@@ -95,7 +93,10 @@ func handlerRegister(s *state, cmd command) error {
 		return err
 	}
 
-	s.cfg.CurrentUserName = user.Name.String
+	if err := s.cfg.SetUser(user.Name.String, user.ID.String()); err != nil {
+		return err
+	}
+
 	fmt.Printf("User \"%s\" registered\n", user.Name.String)
 
 	log.Println("handlerRegister(): registered", user.Name.String)
@@ -116,7 +117,7 @@ func handlerGetUsers(s *state, cmd command) error {
 
 	r, err := s.db.GetUsers(context.Background())
 	if err != nil {
-		fmt.Printf("Could get user list")
+		fmt.Printf("Could not get user list")
 		return err
 	}
 
@@ -126,6 +127,87 @@ func handlerGetUsers(s *state, cmd command) error {
 			fmt.Printf(" (current)")
 		}
 		fmt.Println()
+	}
+
+	return nil
+}
+
+
+func handlerAgg(s *state, cmd command) error {
+	rssF, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(rssF)
+	return nil
+}
+
+func handlerAddFeed(s *state, cmd command) error {
+
+	if len(cmd.args) < 2 {
+		return errors.New("handlerAddFeed() expects two arguments; feed_name & url")
+	}
+
+	if _, err := url.ParseRequestURI(cmd.args[1]); err != nil {
+		return err
+	}
+
+	userUUID, err := uuid.Parse(s.cfg.CurrentUserId)
+	if err != nil {
+		return err
+	}
+
+	uParams := database.CreateFeedParams{
+		ID: uuid.New(),
+		CreatedAt: sql.NullTime{
+			Time: time.Now(), Valid: true,
+		},
+		UpdatedAt:  sql.NullTime{
+			Time: time.Now(), Valid: true,
+		},
+		Name: sql.NullString {
+			String: cmd.args[0], Valid: true,
+		},
+		Url: sql.NullString {
+			String: cmd.args[1], Valid: true,
+		},
+		UserID: uuid.NullUUID {
+			UUID: userUUID, Valid: true,
+		},
+	}
+
+	f, err := s.db.CreateFeed(context.Background(), uParams)
+	if err != nil {
+		fmt.Printf("Could not create feed \"%s\".\n", uParams.Name.String)
+		return err
+	}
+
+	fmt.Printf("Feed \"%s\" from \"%s\" added for \"%s\".\n", f.Name.String, f.Url.String, s.cfg.CurrentUserName)
+
+	return nil
+}
+
+func handlerGetFeeds(s *state, cmd command) error {
+	uMap := make(map[uuid.UUID]string)
+	uRecords, err := s.db.GetUsers(context.Background())
+	if err != nil {
+		fmt.Printf("Could not get user list")
+		return err
+	}
+
+	for _, row := range uRecords {
+		uMap[row.ID] = row.Name.String
+	}
+
+	fRecords, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		fmt.Printf("Could not get feeds list")
+		return err
+	}
+
+	for _, row := range fRecords {
+		fmt.Printf("%s\t%s\t%s\n", row.Name.String, row.Url.String, uMap[row.UserID.UUID])
 	}
 
 	return nil
