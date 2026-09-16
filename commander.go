@@ -185,6 +185,12 @@ func handlerAddFeed(s *state, cmd command) error {
 
 	fmt.Printf("Feed \"%s\" from \"%s\" added for \"%s\".\n", f.Name.String, f.Url.String, s.cfg.CurrentUserName)
 
+	ff, errFF := insertFeedFollows(s, uParams.Url.String, s.cfg.CurrentUserId)
+	if errFF != nil {
+		return errFF
+	}
+	fmt.Printf("\"%s\" now following feed \"%s\"\n", ff.Username.String, ff.Feedname.String)
+
 	return nil
 }
 
@@ -211,4 +217,97 @@ func handlerGetFeeds(s *state, cmd command) error {
 	}
 
 	return nil
+}
+
+// follow <url>:: handlerFollow() -> GetFeedFollowsForUser
+func handlerFollow(s *state, cmd command) error {
+	if len(cmd.args) < 1 {
+		return errors.New("handlerFollow() expects a single argument, a url from existing feed.")
+	}
+	log.Printf("handlerFollow() url %s\n", cmd.args[0])
+
+  ff, err := insertFeedFollows(s, cmd.args[0], s.cfg.CurrentUserId)
+	if err != nil {
+		fmt.Printf("Could follow feed for url \"%s\".\n", cmd.args[0])
+		return err
+	}
+
+	fmt.Printf("\"%s\" now following feed \"%s\"\n", ff.Username.String, ff.Feedname.String)
+
+	return nil
+}
+
+func handlerGetFeedFollowsForUser(s *state, cmd command) error {
+
+	uUserName := sql.NullString {
+		String: s.cfg.CurrentUserName,
+		Valid: true,
+	}
+
+	uRecord, err := s.db.GetUser(context.Background(), uUserName)
+	if err != nil {
+		fmt.Printf("Could get user record for %s. User not registerd?\n", uUserName.String)
+		return err
+	}
+
+	uUserId := uuid.NullUUID {
+		UUID: uRecord.ID,
+		Valid: true,
+	}
+
+	fRecords, err := s.db.GetFeedFollowsForUser(context.Background(), uUserId)
+	if err != nil {
+		fmt.Printf("Could not get feeds list")
+		return err
+	}
+
+	for _, row := range fRecords {
+		fmt.Printf("%s\n", row.Feedname.String)
+	}
+
+	return nil
+}
+
+func insertFeedFollows(s *state, url, usrIdStr string) (database.CreateFeedFollowRow, error) {
+	log.Printf("insertFeedFollows() url %s, usrIdStr %s\n", url, usrIdStr)
+	feedBad := database.CreateFeedFollowRow{} // Satisfy return sig. on various errors.
+
+	uURL := sql.NullString {
+		String: url,
+		Valid: true,
+	}
+	// Make sure url is for existing feed
+	f, err := s.db.GetFeed(context.Background(), uURL)
+	if err != nil {
+		fmt.Printf("Could not get url \"%s\" to follow. Not added with addfeed?\n", uURL.String)
+		return feedBad, err
+	}
+	// Prep. params for inserting new follow
+	userUUID, err := uuid.Parse(usrIdStr)
+	if err != nil {
+		return feedBad, err
+	}
+
+ 	uParams := database.CreateFeedFollowParams{
+		ID: uuid.New(),
+		CreatedAt: sql.NullTime{
+			Time: time.Now(), Valid: true,
+		},
+		UpdatedAt:  sql.NullTime{
+			Time: time.Now(), Valid: true,
+		},
+		UserID: uuid.NullUUID {
+			UUID: userUUID, Valid: true,
+		},
+		FeedID: uuid.NullUUID {
+			UUID: f.ID, Valid: true,
+		},
+	}
+
+	ff, err := s.db.CreateFeedFollow(context.Background(), uParams)
+	if err != nil {
+		fmt.Printf("Could not follow feed for url \"%s\".\n", f.Url.String)
+		return ff, err
+	}
+	return ff, nil
 }

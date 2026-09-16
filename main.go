@@ -51,6 +51,8 @@ func main() {
 	appCmds.register("agg", handlerAgg)
 	appCmds.register("addfeed", handlerAddFeed)
 	appCmds.register("feeds", handlerGetFeeds)
+	appCmds.register("follow", handlerFollow)
+	appCmds.register("following", handlerGetFeedFollowsForUser)
 	log.Printf("%+v\n", appCmds)
 
 
