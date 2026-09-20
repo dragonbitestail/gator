@@ -44,15 +44,16 @@ func main() {
 		cmdMap: make(map[string]func(*state, command) error),
 	}
 
-	appCmds.register("login", handlerLogin)
-	appCmds.register("register", handlerRegister)
-	appCmds.register("reset", handlerDeleteUsers)
-	appCmds.register("users", handlerGetUsers)
-	appCmds.register("agg", handlerAgg)
-	appCmds.register("addfeed", handlerAddFeed)
-	appCmds.register("feeds", handlerGetFeeds)
-	appCmds.register("follow", handlerFollow)
-	appCmds.register("following", handlerGetFeedFollowsForUser)
+	appCmds.register(loginC, middlewareLoggedIn(handlerLogin))
+	appCmds.register(registerC, handlerRegister)
+	appCmds.register(resetC, handlerDeleteUsers)
+	appCmds.register(usersC, handlerGetUsers)
+	appCmds.register(aggC, handlerAgg)
+	appCmds.register(addfeedC, handlerAddFeed)
+	appCmds.register(feedsC, handlerGetFeeds)
+	appCmds.register(followC, handlerFollow)
+	appCmds.register("following", middlewareLoggedIn(handlerGetFeedFollowsForUser))
+	appCmds.register("unfollow", middlewareLoggedIn(handlerUnfollow))
 	log.Printf("%+v\n", appCmds)
 
 

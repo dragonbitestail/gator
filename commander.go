@@ -13,6 +13,19 @@ import (
 	"gator/pkg/database"
 )
 
+const (
+	loginC = "login"
+	registerC = "register"
+	resetC = "reset"
+	usersC = "users"
+	aggC = "agg"
+	addfeedC = "addfeed"
+	feedsC = "feeds"
+	followC = "follow"
+	followingC = "following"
+	unfollowC = "unfollow"
+)
+
 type command struct {
 	name string
 	args []string
@@ -22,6 +35,31 @@ type commands struct {
 	cmdMap map[string]func(*state, command) error
 }
 
+
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+
+	fCmdHandler := func(s *state, cmd command) error {
+		log.Printf("middlewareLoggedIn() w/ command: %s, args: %v\n", cmd.name, cmd.args)
+		user := s.cfg.CurrentUserName
+		if cmd.name == loginC && len(cmd.args) == 1 {
+			user = cmd.args[0]
+		}
+
+		uName := sql.NullString {
+			String: user,
+			Valid: true,
+		}
+
+		u, err := s.db.GetUser(context.Background(), uName)
+		if err != nil {
+			fmt.Printf("Could not login user \"%s\". Not registered?\n", uName.String)
+			return err
+		}
+		return handler(s, cmd, u)
+	}
+
+	return fCmdHandler
+}
 
 // commands struct method receivers============================================
 
@@ -43,25 +81,49 @@ func (c *commands) run(s *state, cmd command) error {
 
 
 // Command Handlers============================================================
+func handlerUnfollow(s *state, cmd command, user database.User) error {
+	log.Printf("handlerUnfollow() cmd: %s, args: %s\n", cmd.name, cmd.args)
+	if len(cmd.args) < 1 {
+		return errors.New("handlerUnfollow() expects a single argument, the feed url to unfollow.")
+	}
 
-func handlerLogin(s *state, cmd command) error {
+	uURL := sql.NullString {
+		String: cmd.args[0],
+		Valid: true,
+	}
+
+	f, err := s.db.GetFeed(context.Background(), uURL)
+	if err != nil {
+		fmt.Printf("Could not get url \"%s\" to unfollow. Not added with addfeed?\n", uURL.String)
+		return err
+	}
+
+	uParams := database.DeleteFeedFollowForUserIdParams {
+		UserID: uuid.NullUUID {
+				UUID: user.ID,
+				Valid: true,
+		},
+		FeedID: uuid.NullUUID {
+				UUID: f.ID,
+				Valid: true,
+		},
+	}
+
+	errUnfollow := s.db.DeleteFeedFollowForUserId(context.Background(), uParams)
+	if errUnfollow != nil {
+		fmt.Printf("Could not unfollow feed for url \"%s\".\n", f.Url.String)
+		return errUnfollow
+	}
+	return nil
+}
+
+func handlerLogin(s *state, cmd command, user database.User) error {
 
 	if len(cmd.args) < 1 {
 		return errors.New("handlerLogin() expects a single argument, the username")
 	}
 
-	uName := sql.NullString {
-		String: cmd.args[0],
-		Valid: true,
-	}
-
-	u, err := s.db.GetUser(context.Background(), uName)
-	if err != nil {
-		fmt.Printf("Could not login user \"%s\". Not registered?\n", uName.String)
-		return err
-	}
-
-	if err := s.cfg.SetUser(u.Name.String, u.ID.String()); err != nil {
+	if err := s.cfg.SetUser(user.Name.String, user.ID.String()); err != nil {
 		return err
 	}
 
@@ -193,7 +255,7 @@ func handlerAddFeed(s *state, cmd command) error {
 
 	return nil
 }
-
+// feedsC
 func handlerGetFeeds(s *state, cmd command) error {
 	uMap := make(map[uuid.UUID]string)
 	uRecords, err := s.db.GetUsers(context.Background())
@@ -219,7 +281,7 @@ func handlerGetFeeds(s *state, cmd command) error {
 	return nil
 }
 
-// follow <url>:: handlerFollow() -> GetFeedFollowsForUser
+// followC
 func handlerFollow(s *state, cmd command) error {
 	if len(cmd.args) < 1 {
 		return errors.New("handlerFollow() expects a single argument, a url from existing feed.")
@@ -237,21 +299,11 @@ func handlerFollow(s *state, cmd command) error {
 	return nil
 }
 
-func handlerGetFeedFollowsForUser(s *state, cmd command) error {
-
-	uUserName := sql.NullString {
-		String: s.cfg.CurrentUserName,
-		Valid: true,
-	}
-
-	uRecord, err := s.db.GetUser(context.Background(), uUserName)
-	if err != nil {
-		fmt.Printf("Could get user record for %s. User not registerd?\n", uUserName.String)
-		return err
-	}
+// followingC
+func handlerGetFeedFollowsForUser(s *state, cmd command, user database.User) error {
 
 	uUserId := uuid.NullUUID {
-		UUID: uRecord.ID,
+		UUID: user.ID,
 		Valid: true,
 	}
 
