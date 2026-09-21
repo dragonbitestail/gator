@@ -194,15 +194,25 @@ func handlerGetUsers(s *state, cmd command) error {
 	return nil
 }
 
-
+// aggC
 func handlerAgg(s *state, cmd command) error {
-	rssF, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if len(cmd.args) < 1 {
+		return errors.New("handlerAgg() expects one argument; time_between_reqs (e.g., 1m, 2h, etc...")
+	}
+
+	tInterval, err := time.ParseDuration(cmd.args[0])
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(rssF)
-	return nil
+	fmt.Printf("Collecting feeds every %v\n", tInterval)
+
+	ticker := time.NewTicker(tInterval)
+	for ;; <-ticker.C {
+		scrapeFeeds(s)
+	}
+
+	// return nil
 }
 
 func handlerAddFeed(s *state, cmd command) error {
@@ -362,4 +372,32 @@ func insertFeedFollows(s *state, url, usrIdStr string) (database.CreateFeedFollo
 		return ff, err
 	}
 	return ff, nil
+}
+
+/*
+Iterate over the items in the feed and print their titles to the console.
+*/
+func scrapeFeeds(s *state) error {
+	// Get the next feed to fetch from the DB and mark it as fetched.
+	f, errF := s.db.GetNextFeedToFetch(context.Background())
+	if errF != nil {
+		return errF
+	}
+
+	errU := s.db.MarkFeedFetched(context.Background(), f.ID)
+	if errU != nil {
+		return errU
+	}
+
+	// Fetch the feed using the URL (we already wrote this function)
+	rssF, err := fetchFeed(context.Background(), f.Url.String)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Fetched Feed Items for Channel:: %s (%s)\n", rssF.Channel.Title, f.Url.String)
+	for _, fItem := range rssF.Channel.Item {
+		fmt.Printf("Feed Item Title: %s\n", fItem.Title)
+	}
+
+	return nil
 }

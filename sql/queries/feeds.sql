@@ -62,3 +62,38 @@ WHERE ff.user_id = $1;
 -- name: DeleteFeedFollowForUserId :exec
 DELETE FROM feed_follows
 WHERE user_id = $1 AND feed_id = $2;
+
+-- name: MarkFeedFetched :exec
+UPDATE feeds
+SET updated_at = CURRENT_TIMESTAMP, last_fetched_at = CURRENT_TIMESTAMP
+WHERE id = $1;
+
+-- name: GetNextFeedToFetch :one
+SELECT * FROM feeds
+ORDER BY last_fetched_at NULLS FIRST
+LIMIT 1;
+
+-- name: CreatePost :one
+INSERT INTO
+	posts(id, created_at, updated_at, title, url, description, published_at, feed_id)
+	VALUES(
+		$1,
+		$2,
+		$3,
+		$4,
+		$5,
+		$6,
+		$7,
+		$8
+	)
+RETURNING *;
+
+-- name: GetPostsForUser :many
+WITH i_feed_follow AS (
+	SELECT * FROM feed_follows
+	WHERE user_id = $1
+)
+SELECT * FROM posts p
+	WHERE i_feed_follow.feed_id = p.feed_id
+	ORDER BY published_at DESC
+	LIMIT $2;
