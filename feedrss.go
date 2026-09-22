@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
   "fmt"
 	"html"
 	"io"
-	"log"
+	//"log"
   "net/http"
 	"encoding/xml"
+	"golang.org/x/net/html/charset"
+	_ "gator/pkg/logging"
 )
 
 type requestType string
@@ -36,29 +39,45 @@ type RSSItem struct {
 }
 
 func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+	logr.Debug("fetchFeed()", "feedURL", feedURL)
+
 	rssFeed := RSSFeed{}
 	resp, bodyBytes, err := getResponse(ctx, feedURL, reqGetC)
 	if err != nil {
+		logr.Error("fetchFeed() getResponse returning error", "feedURL", feedURL)
 		return nil, err
 	}
 
 	// Check resp
+	logr.Debug("fetchFeed() eval'ing response", "StatusCode", resp.StatusCode)
 	if resp.StatusCode != http.StatusOK {
+		logr.Error("fetchFeed() http Status not OK", "feedURL", feedURL)
 		return nil, errors.New("Response not OK: " + resp.Status)
 	}
 
-	// Unmarshal XML to RSSFeed
-	err = xml.Unmarshal(bodyBytes, &rssFeed)
+	// Decode XML to RSSFeed
+	// https://stackoverflow.com/questions/6002619/unmarshal-an-iso-8859-1-xml-input-in-go
+	reader := bytes.NewReader(bodyBytes)
+	decoder := xml.NewDecoder(reader)
+	decoder.CharsetReader = charset.NewReaderLabel
+	err = decoder.Decode(&rssFeed)
 	if err != nil {
+		logr.Error("fetchFeed() xml Unmarshal failed")
 		return nil, err
 	}
 
-	unescapeEntitiesHTML(&rssFeed)
+	err = unescapeEntitiesHTML(&rssFeed)
+	if err != nil {
+		logr.Error("fetchFeed() unescapeEntitiesHTML() returned error", "feedURL", feedURL)
+		return nil, err
+	}
 
 	return &rssFeed, nil
 }
 
 func unescapeEntitiesHTML(rss *RSSFeed) error {
+	logr.Debug("unescapeEntitiesHTML()", "rss.Channel.Title", rss.Channel.Title)
+
   rss.Channel.Title = html.UnescapeString(rss.Channel.Title)
   rss.Channel.Description = html.UnescapeString(rss.Channel.Description)
 	for _, rssItem := range rss.Channel.Item {
@@ -72,7 +91,7 @@ func getResponse(ctx context.Context, uri string, rType requestType) (*http.Resp
     // Create new request:
     req, err := http.NewRequestWithContext(ctx, string(rType), uri, nil)
     if err != nil {
-      log.Println("getResponse(): Returning error creating request.")
+      logr.Error("getResponse(): Returning error creating request.")
       return nil, nil, err
     }
 
@@ -84,7 +103,7 @@ func getResponse(ctx context.Context, uri string, rType requestType) (*http.Resp
     client := &http.Client{}
     resp, err := client.Do(req)
     if err != nil {
-      log.Println("getResponse(): Returning error making request.")
+      logr.Error("getResponse(): Returning error making request.")
       return nil, nil, err
     }
     defer resp.Body.Close()
@@ -100,9 +119,9 @@ func getResponse(ctx context.Context, uri string, rType requestType) (*http.Resp
 func getResponseBody(resp *http.Response) ([]byte, error) {
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logr.Error("getResponseBody() error reading from response body")
 		return nil, err
 	}
-	//log.Println("getResponseBody() return", string(b[:]))
 	return b, nil
 }
 

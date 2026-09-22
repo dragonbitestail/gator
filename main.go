@@ -7,6 +7,7 @@ import (
 		_ "github.com/lib/pq"
 		"gator/pkg/database"
 		gtc "gator/pkg/config"
+		"gator/pkg/logging"
 )
 
 type state struct {
@@ -17,8 +18,10 @@ type state struct {
 var cmdEntered string
 var argsEntered []string
 
+var logr = ilogger.GetLogger()
+
 func init(){
-	log.Printf("%+v\n", os.Args)
+	logr.Debug("init()", "args",  os.Args)
 
 	if len(os.Args) < 2 {
 		log.Fatal("No command given")
@@ -27,7 +30,7 @@ func init(){
 	cmdEntered = os.Args[1]
 	if len(os.Args) > 2 {
 		argsEntered = os.Args[2:]
-		log.Printf("Parsed args into argsEntered slice %s\n", argsEntered)
+		logr.Debug("init() saved args", "argsEntered", argsEntered)
 	}
 
 }
@@ -54,7 +57,7 @@ func main() {
 	appCmds.register(followC, handlerFollow)
 	appCmds.register("following", middlewareLoggedIn(handlerGetFeedFollowsForUser))
 	appCmds.register("unfollow", middlewareLoggedIn(handlerUnfollow))
-	log.Printf("%+v\n", appCmds)
+	logr.Debug("main()", "appCmds", appCmds)
 
 
 	cState.cfg = readConfig()

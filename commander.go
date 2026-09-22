@@ -39,7 +39,7 @@ type commands struct {
 func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
 
 	fCmdHandler := func(s *state, cmd command) error {
-		log.Printf("middlewareLoggedIn() w/ command: %s, args: %v\n", cmd.name, cmd.args)
+		logr.Info("middlewareLoggedIn() >> HoF", "cmd.name", cmd.name, "cmd.args", cmd.args)
 		user := s.cfg.CurrentUserName
 		if cmd.name == loginC && len(cmd.args) == 1 {
 			user = cmd.args[0]
@@ -65,12 +65,12 @@ func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) 
 
 func (c *commands) register(name string, f func(*state, command) error) {
 	c.cmdMap[name] = f
-	log.Println("register() func handler for", name)
+	logr.Debug("register() handler", "name", name)
 	return
 }
 
 func (c *commands) run(s *state, cmd command) error {
-	log.Println("run() attempting to call func handler for", cmd.name)
+	logr.Info("run() attempting to call func handler", "cmd.name", cmd.name)
 	f, ok := c.cmdMap[cmd.name]
 	if !ok {
 		return fmt.Errorf("Unknown command: %s", cmd.name)
@@ -161,11 +161,12 @@ func handlerRegister(s *state, cmd command) error {
 
 	fmt.Printf("User \"%s\" registered\n", user.Name.String)
 
-	log.Println("handlerRegister(): registered", user.Name.String)
+	logr.Debug("handlerRegister(): registered", "user.Name.String", user.Name.String)
 	return nil
 }
 
 func handlerDeleteUsers(s *state, cmd command) error {
+	logr.Debug("handlerDeleteUsers(): deleting users and all associated cascade records.")
 
 	err := s.db.DeleteUsers(context.Background())
 	if err != nil {
@@ -205,11 +206,14 @@ func handlerAgg(s *state, cmd command) error {
 		return err
 	}
 
-	fmt.Printf("Collecting feeds every %v\n", tInterval)
+	fmt.Printf("Collecting feeds every %v, one at a time unfeteched first, then oldest last updated.\n", tInterval)
 
 	ticker := time.NewTicker(tInterval)
 	for ;; <-ticker.C {
-		scrapeFeeds(s)
+		err := scrapeFeeds(s)
+		if err != nil {
+			logr.Error("handlerAgg() scrapeFeeds() returned error", "err", err)
+		}
 	}
 
 	// return nil
@@ -296,7 +300,7 @@ func handlerFollow(s *state, cmd command) error {
 	if len(cmd.args) < 1 {
 		return errors.New("handlerFollow() expects a single argument, a url from existing feed.")
 	}
-	log.Printf("handlerFollow() url %s\n", cmd.args[0])
+	logr.Debug("handlerFollow() arg", "url", cmd.args[0])
 
   ff, err := insertFeedFollows(s, cmd.args[0], s.cfg.CurrentUserId)
 	if err != nil {
@@ -331,7 +335,7 @@ func handlerGetFeedFollowsForUser(s *state, cmd command, user database.User) err
 }
 
 func insertFeedFollows(s *state, url, usrIdStr string) (database.CreateFeedFollowRow, error) {
-	log.Printf("insertFeedFollows() url %s, usrIdStr %s\n", url, usrIdStr)
+	logr.Debug("insertFeedFollows() IN", "url", url, "usrIdStr", usrIdStr)
 	feedBad := database.CreateFeedFollowRow{} // Satisfy return sig. on various errors.
 
 	uURL := sql.NullString {
@@ -389,15 +393,42 @@ func scrapeFeeds(s *state) error {
 		return errU
 	}
 
-	// Fetch the feed using the URL (we already wrote this function)
+	// Fetch the feed using the URL
 	rssF, err := fetchFeed(context.Background(), f.Url.String)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Fetched Feed Items for Channel:: %s (%s)\n", rssF.Channel.Title, f.Url.String)
 	for _, fItem := range rssF.Channel.Item {
-		fmt.Printf("Feed Item Title: %s\n", fItem.Title)
+		fmt.Printf("Feed Item Title: %s, PubDate: %s\n", fItem.Title, fItem.PubDate)
+
+		// CreatePost :: posts(id, created_at, updated_at, title, url, description, published_at, feed_id)
+		//pParams := database.CreatePostParams {
+		//	ID: uuid.New(),
+		//	CreatedAt: sql.NullTime{
+		//		Time: time.Now(), Valid: true,
+		//	},
+		//	UpdatedAt:  sql.NullTime{
+		//		Time: time.Now(), Valid: true,
+		//	},
+		//	Title: sql.NullString {
+		//		String: fItem.Title, Valid: true,
+		//	},
+		//	Url: fItem.Link,
+		//	Description: sql.NullString {
+		//		String: fItem.Description, Valid: true,
+		//	},
+		//	PublishedAt:  sql.NullTime{
+		//		Time: TODO, Valid: true,
+		//	},
+		//	FeedID: uuid.NullUUID {
+		//		UUID: f.ID, Valid: true,
+		//	},
+		//}
+
 	}
+
+
 
 	return nil
 }
