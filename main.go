@@ -36,15 +36,20 @@ func init(){
 }
 
 func main() {
-	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432/gator")
+	var cState state
+
+	cState.cfg = readConfig()
+	db, err := sql.Open("postgres", cState.cfg.DbURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 	dbQueries := database.New(db)
 
-	var cState state
+	cState.db = dbQueries
+
 	var appCmds = commands {
 		cmdMap: make(map[string]func(*state, command) error),
+		help: make(map[string]string),
 	}
 
 	appCmds.register(loginC, middlewareLoggedIn(handlerLogin))
@@ -55,14 +60,11 @@ func main() {
 	appCmds.register(addfeedC, handlerAddFeed)
 	appCmds.register(feedsC, handlerGetFeeds)
 	appCmds.register(followC, handlerFollow)
-	appCmds.register("following", middlewareLoggedIn(handlerGetFeedFollowsForUser))
-	appCmds.register("unfollow", middlewareLoggedIn(handlerUnfollow))
-	appCmds.register("browse", middlewareLoggedIn(handlerBrowse))
+	appCmds.register(followingC, middlewareLoggedIn(handlerGetFeedFollowsForUser))
+	appCmds.register(unfollowC, middlewareLoggedIn(handlerUnfollow))
+	appCmds.register(browseC, middlewareLoggedIn(handlerBrowse))
+	appCmds.register(helpC, middlewareHelp(appCmds, handlerHelp)) // MUST GO LAST TO CONTAIN ALL REGISERED COMMANDS
 	logr.Debug("main()", "appCmds", appCmds)
-
-
-	cState.cfg = readConfig()
-	cState.db = dbQueries
 
 	cmd := command {
 		name: cmdEntered,

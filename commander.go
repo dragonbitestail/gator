@@ -15,19 +15,74 @@ import (
 	"gator/pkg/database"
 )
 
-const (
-	loginC = "login"
-	registerC = "register"
-	resetC = "reset"
-	usersC = "users"
-	aggC = "agg"
-	addfeedC = "addfeed"
-	feedsC = "feeds"
-	followC = "follow"
-	followingC = "following"
-	unfollowC = "unfollow"
-	browseC = "browse"
-)
+var helpC = commandItem {
+	key: "help",
+	help: "Command to display help for each command.",
+}
+var loginC = commandItem {
+	key: "login",
+	help: `Set user to named user >
+	gator login user1`,
+}
+var registerC = commandItem {
+	key: "register",
+	help: `Add new user to Gator >
+	gator registered user2`,
+}
+var resetC = commandItem {
+	key: "reset",
+	help: `WARNING: Wipe all users which results in cascade delete of all
+	associated user records (feeds, follows, posts)`,
+}
+var usersC = commandItem {
+	key: "users",
+	help: "List all",
+}
+var aggC = commandItem {
+	key: "agg",
+	help: `start a feed gathering loop to collect feed posts for followed
+	feeds at specified interval >
+	gator agg 15m
+	m = minutes, 2h = hours
+	To stop: ctrl-c`,
+}
+var addfeedC = commandItem {
+	key: "addfeed",
+	help: `Add feed to availble feeds to follow. Start following the feed for
+	the current user >
+	gator addfeed "NASA News" https://cneos.jpl.nasa.gov/feed/news.xml
+	* Any other user can elect to follow the feed using the "follow" command.,
+	* Feed post will not be available unless you are running the "agg" command to gather feed data.
+	  This can be done in separate window since it keeps looping and gathering feed posts.`,
+}
+var feedsC = commandItem {
+	key: "feeds",
+	help: `List available feeds >
+	gator feeds`,
+}
+var followC = commandItem {
+	key: "follow",
+	help: `Follow existing feed which was added previously by any user using
+	the "addfeed" command >
+	gator follow https://cneos.jpl.nasa.gov/feed/news.xml
+	See the "feeds" command to list available feeds.`,
+}
+var followingC = commandItem {
+	key: "following",
+	help: `List feeds already followed by currently logged in user >
+	gator following`,
+}
+var unfollowC = commandItem {
+	key: "unfollow",
+	help: `Unfollow a feed for the current user >
+	gator unfollow https://cneos.jpl.nasa.gov/feed/news.xml`,
+}
+var browseC = commandItem {
+	key: "browse",
+	help: `Browse most recently published feeds that were gethered by "agg" command >
+	gator browse 20`,
+}
+// END ===== command item vars
 
 type command struct {
 	name string
@@ -36,6 +91,48 @@ type command struct {
 
 type commands struct {
 	cmdMap map[string]func(*state, command) error
+	help map[string]string
+	regOrder []string
+}
+
+type commandItem struct {
+	key string
+	help string
+}
+
+
+
+// commands struct method receivers============================================
+
+//func (c *commands) register(name string, f func(*state, command) error) {
+func (c *commands) register(cmdI commandItem, f func(*state, command) error) {
+	c.cmdMap[cmdI.key] = f
+	c.help[cmdI.key] = cmdI.help
+	c.regOrder = append(c.regOrder, cmdI.key)
+	logr.Debug("register() handler", "name", cmdI.key, "help", cmdI.help)
+	return
+}
+
+func (c *commands) run(s *state, cmd command) error {
+	logr.Info("run() attempting to call func handler", "cmd.name", cmd.name)
+	f, ok := c.cmdMap[cmd.name]
+	if !ok {
+		return fmt.Errorf("Unknown command: %s", cmd.name)
+	}
+
+	return f(s, cmd)
+}
+
+// Middleware command functions :===============================================
+func middlewareHelp( cmds commands, handler func(s *state, cmd command, cmds commands) error) func(*state, command ) error {
+
+	fCmdHandler := func(s *state, cmd command) error {
+		logr.Info("middlewareHelp() >> HoF", "cmd.name", cmd.name, "cmd.args", cmd.args)
+
+		return handler(s, cmd, cmds)
+	}
+
+	return fCmdHandler
 }
 
 
@@ -44,7 +141,7 @@ func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) 
 	fCmdHandler := func(s *state, cmd command) error {
 		logr.Info("middlewareLoggedIn() >> HoF", "cmd.name", cmd.name, "cmd.args", cmd.args)
 		user := s.cfg.CurrentUserName
-		if cmd.name == loginC && len(cmd.args) == 1 {
+		if cmd.name == loginC.key && len(cmd.args) == 1 {
 			user = cmd.args[0]
 		}
 
@@ -64,26 +161,14 @@ func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) 
 	return fCmdHandler
 }
 
-// commands struct method receivers============================================
-
-func (c *commands) register(name string, f func(*state, command) error) {
-	c.cmdMap[name] = f
-	logr.Debug("register() handler", "name", name)
-	return
-}
-
-func (c *commands) run(s *state, cmd command) error {
-	logr.Info("run() attempting to call func handler", "cmd.name", cmd.name)
-	f, ok := c.cmdMap[cmd.name]
-	if !ok {
-		return fmt.Errorf("Unknown command: %s", cmd.name)
-	}
-
-	return f(s, cmd)
-}
-
-
 // Command Handlers============================================================
+func handlerHelp(s *state, cmd command, cmds commands) error {
+	for _, key := range cmds.regOrder {
+		fmt.Printf("command: %s :: %s\n", key, cmds.help[key])
+	}
+	return nil
+}
+
 func handlerUnfollow(s *state, cmd command, user database.User) error {
 	log.Printf("handlerUnfollow() cmd: %s, args: %s\n", cmd.name, cmd.args)
 	if len(cmd.args) < 1 {
