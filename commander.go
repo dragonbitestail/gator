@@ -27,7 +27,7 @@ var loginC = commandItem {
 var registerC = commandItem {
 	key: "register",
 	help: `Add new user to Gator >
-	gator registered user2`,
+	gator register user2`,
 }
 var resetC = commandItem {
 	key: "reset",

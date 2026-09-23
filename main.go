@@ -24,7 +24,7 @@ func init(){
 	logr.Debug("init()", "args",  os.Args)
 
 	if len(os.Args) < 2 {
-		log.Fatal("No command given")
+		log.Fatal("No command given. Try: gator help")
 	}
 
 	cmdEntered = os.Args[1]
@@ -52,9 +52,8 @@ func main() {
 		help: make(map[string]string),
 	}
 
-	appCmds.register(loginC, middlewareLoggedIn(handlerLogin))
 	appCmds.register(registerC, handlerRegister)
-	appCmds.register(resetC, handlerDeleteUsers)
+	appCmds.register(loginC, middlewareLoggedIn(handlerLogin))
 	appCmds.register(usersC, handlerGetUsers)
 	appCmds.register(aggC, handlerAgg)
 	appCmds.register(addfeedC, handlerAddFeed)
@@ -63,6 +62,7 @@ func main() {
 	appCmds.register(followingC, middlewareLoggedIn(handlerGetFeedFollowsForUser))
 	appCmds.register(unfollowC, middlewareLoggedIn(handlerUnfollow))
 	appCmds.register(browseC, middlewareLoggedIn(handlerBrowse))
+	appCmds.register(resetC, handlerDeleteUsers)
 	appCmds.register(helpC, middlewareHelp(appCmds, handlerHelp)) // MUST GO LAST TO CONTAIN ALL REGISERED COMMANDS
 	logr.Debug("main()", "appCmds", appCmds)
 
