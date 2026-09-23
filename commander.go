@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 	"net/url"
 	"github.com/google/uuid"
@@ -24,6 +26,7 @@ const (
 	followC = "follow"
 	followingC = "following"
 	unfollowC = "unfollow"
+	browseC = "browse"
 )
 
 type command struct {
@@ -378,6 +381,40 @@ func insertFeedFollows(s *state, url, usrIdStr string) (database.CreateFeedFollo
 	return ff, nil
 }
 
+// browseC
+//func handlerLogin(s *state, cmd command, user database.User) error {
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	var err error
+	limitPosts := 2
+	if len(cmd.args) < 1 {
+		logr.Info("handlerBrowse() no limit provided using default limit")
+	} else {
+		limitPosts, err = strconv.Atoi(cmd.args[0])
+		if err != nil {
+			return err
+		}
+	}
+
+	logr.Debug("handlerBrowse() building params", "user.ID", user.ID, "limitPosts", limitPosts)
+	pParams := database.GetPostsForUserParams {
+		UserID: uuid.NullUUID {
+			UUID: user.ID, Valid: true,
+		},
+		Limit: int32(limitPosts),
+	}
+
+	posts, errP := s.db.GetPostsForUser(context.Background(), pParams)
+	if errP != nil {
+		return err
+	}
+
+	logr.Debug("handlerBrowse() printing posts")
+	for _, post := range posts {
+		fmt.Printf("%s\t%s\t%s\n", post.Title.String, post.Url, post.PublishedAt.Time)
+	}
+	return nil
+}
+
 /*
 Iterate over the items in the feed and print their titles to the console.
 */
@@ -401,34 +438,75 @@ func scrapeFeeds(s *state) error {
 	fmt.Printf("Fetched Feed Items for Channel:: %s (%s)\n", rssF.Channel.Title, f.Url.String)
 	for _, fItem := range rssF.Channel.Item {
 		fmt.Printf("Feed Item Title: %s, PubDate: %s\n", fItem.Title, fItem.PubDate)
-
+		var validDate bool = true
+		pDate, err := getDateStrAsTime(fItem.PubDate)
+		if err != nil {
+			logr.Warn("scrapeFeeds() published date issue", "fItem.Title", fItem.Title, "err", err)
+			validDate = false
+		}
 		// CreatePost :: posts(id, created_at, updated_at, title, url, description, published_at, feed_id)
-		//pParams := database.CreatePostParams {
-		//	ID: uuid.New(),
-		//	CreatedAt: sql.NullTime{
-		//		Time: time.Now(), Valid: true,
-		//	},
-		//	UpdatedAt:  sql.NullTime{
-		//		Time: time.Now(), Valid: true,
-		//	},
-		//	Title: sql.NullString {
-		//		String: fItem.Title, Valid: true,
-		//	},
-		//	Url: fItem.Link,
-		//	Description: sql.NullString {
-		//		String: fItem.Description, Valid: true,
-		//	},
-		//	PublishedAt:  sql.NullTime{
-		//		Time: TODO, Valid: true,
-		//	},
-		//	FeedID: uuid.NullUUID {
-		//		UUID: f.ID, Valid: true,
-		//	},
-		//}
+		pParams := database.CreatePostParams {
+			ID: uuid.New(),
+			CreatedAt: sql.NullTime{
+				Time: time.Now(), Valid: true,
+			},
+			UpdatedAt:  sql.NullTime{
+				Time: time.Now(), Valid: true,
+			},
+			Title: sql.NullString {
+				String: fItem.Title, Valid: true,
+			},
+			Url: fItem.Link,
+			Description: sql.NullString {
+				String: fItem.Description, Valid: true,
+			},
+			PublishedAt:  sql.NullTime{
+				Time: pDate, Valid: validDate,
+			},
+			FeedID: uuid.NullUUID {
+				UUID: f.ID, Valid: true,
+			},
+		}
 
+		pRec, errP := s.db.CreatePost(context.Background(), pParams)
+		if errP != nil {
+			if strings.Contains(errP.Error(), "unique constraint") && strings.Contains(errP.Error(), "posts_url_key") {
+				logr.Info("scrapeFeeds() ignore insert of already inserted post", "fItem.Title", fItem.Title)
+			} else {
+				logr.Warn("scrapeFeeds() unknown error on insert of post", "fItem.Title", fItem.Title)
+			}
+		} else {
+			logr.Info("scrapeFeeds() post added", "pRec.Title", pRec.Title)
+		}
 	}
 
-
-
 	return nil
+}
+
+
+func getDateStrAsTime(dateStr string) (time.Time, error) {
+	logr.Debug("getDateStrAsTime()", "dateStr", dateStr)
+	layouts := []string{
+		time.RFC1123, time.RFC1123Z,
+		time.Layout, time.ANSIC, time.UnixDate, time.RubyDate, time.RFC822,
+		time.RFC822Z, time.RFC850, time.RFC3339,
+		time.RFC3339Nano,
+	}
+
+	var errFinal error
+	for _, tLayout := range layouts {
+		normalizedDate, err := time.Parse(tLayout, dateStr)
+		if err == nil {
+			logr.Info("getDateStrAsTime() date successfully parsed", "tLayout", tLayout)
+			return normalizedDate, nil
+		}
+		logr.Warn("getDateStrAsTime() error parsing date", "err", err)
+		//logr.Error("getDateStrAsTime() could not parse date", "dateStr", dateStr)
+		//return time.Now(), err
+		errFinal = err
+	}
+
+	// Caller determine use of time.Now() based on error
+	logr.Warn("getDateStrAsTime() could not parse date using all known layouts. Using time.Now() fallback.")
+	return time.Now(), errFinal
 }

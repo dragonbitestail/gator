@@ -89,11 +89,16 @@ INSERT INTO
 RETURNING *;
 
 -- name: GetPostsForUser :many
-WITH i_feed_follow AS (
-	SELECT * FROM feed_follows
-	WHERE user_id = $1
-)
-SELECT * FROM posts p
-	WHERE i_feed_follow.feed_id = p.feed_id
-	ORDER BY published_at DESC
-	LIMIT $2;
+--WITH i_feed_follow AS (
+--	SELECT * FROM feed_follows
+--	WHERE user_id = $1
+--)
+--SELECT * FROM posts p
+--	WHERE i_feed_follow.feed_id = p.feed_id
+--	ORDER BY published_at DESC
+--	LIMIT $2;
+SELECT p.id, p.created_at, p.updated_at, p.title, p.url, p.description, p.published_at, p.feed_id FROM posts p
+  INNER JOIN feed_follows ff ON ff.feed_id = p.feed_id
+WHERE ff.user_id = $1
+ORDER BY p.published_at DESC
+LIMIT $2;

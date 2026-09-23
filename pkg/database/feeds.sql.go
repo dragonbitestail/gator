@@ -335,14 +335,11 @@ func (q *Queries) GetNextFeedToFetch(ctx context.Context) (Feed, error) {
 }
 
 const getPostsForUser = `-- name: GetPostsForUser :many
-WITH i_feed_follow AS (
-	SELECT id, created_at, updated_at, user_id, feed_id FROM feed_follows
-	WHERE user_id = $1
-)
-SELECT id, created_at, updated_at, title, url, description, published_at, feed_id FROM posts p
-	WHERE i_feed_follow.feed_id = p.feed_id
-	ORDER BY published_at DESC
-	LIMIT $2
+SELECT p.id, p.created_at, p.updated_at, p.title, p.url, p.description, p.published_at, p.feed_id FROM posts p
+  INNER JOIN feed_follows ff ON ff.feed_id = p.feed_id
+WHERE ff.user_id = $1
+ORDER BY p.published_at DESC
+LIMIT $2
 `
 
 type GetPostsForUserParams struct {
@@ -350,6 +347,17 @@ type GetPostsForUserParams struct {
 	Limit  int32
 }
 
+// WITH i_feed_follow AS (
+//
+//	SELECT * FROM feed_follows
+//	WHERE user_id = $1
+//
+// )
+// SELECT * FROM posts p
+//
+//	WHERE i_feed_follow.feed_id = p.feed_id
+//	ORDER BY published_at DESC
+//	LIMIT $2;
 func (q *Queries) GetPostsForUser(ctx context.Context, arg GetPostsForUserParams) ([]Post, error) {
 	rows, err := q.db.QueryContext(ctx, getPostsForUser, arg.UserID, arg.Limit)
 	if err != nil {
