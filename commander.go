@@ -104,7 +104,6 @@ type commandItem struct {
 
 // commands struct method receivers============================================
 
-//func (c *commands) register(name string, f func(*state, command) error) {
 func (c *commands) register(cmdI commandItem, f func(*state, command) error) {
 	c.cmdMap[cmdI.key] = f
 	c.help[cmdI.key] = cmdI.help
