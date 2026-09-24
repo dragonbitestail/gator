@@ -584,9 +584,7 @@ func getDateStrAsTime(dateStr string) (time.Time, error) {
 			logr.Info("getDateStrAsTime() date successfully parsed", "tLayout", tLayout)
 			return normalizedDate, nil
 		}
-		logr.Warn("getDateStrAsTime() error parsing date", "err", err)
-		//logr.Error("getDateStrAsTime() could not parse date", "dateStr", dateStr)
-		//return time.Now(), err
+		logr.Info("getDateStrAsTime() error parsing date", "err", err)
 		errFinal = err
 	}
 
