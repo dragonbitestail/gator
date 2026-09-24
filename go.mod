@@ -1,4 +1,4 @@
-module gator
+module github.com/dragonbitestail/gator
 
 go 1.27.1
 
