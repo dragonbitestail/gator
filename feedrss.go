@@ -11,7 +11,7 @@ import (
   "net/http"
 	"encoding/xml"
 	"golang.org/x/net/html/charset"
-	_ "gator/pkg/logging"
+	_ "github.com/dragonbitestail/gator/pkg/logging"
 )
 
 type requestType string

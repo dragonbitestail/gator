@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"github.com/google/uuid"
 
-	"gator/pkg/database"
+	"github.com/dragonbitestail/gator/pkg/database"
 )
 
 var helpC = commandItem {

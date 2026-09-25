@@ -5,9 +5,9 @@ import (
 		"os"
 		"database/sql"
 		_ "github.com/lib/pq"
-		"gator/pkg/database"
-		gtc "gator/pkg/config"
-		"gator/pkg/logging"
+		"github.com/dragonbitestail/gator/pkg/database"
+		gtc "github.com/dragonbitestail/gator/pkg/config"
+		"github.com/dragonbitestail/gator/pkg/logging"
 )
 
 type state struct {
