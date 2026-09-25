@@ -48,15 +48,21 @@ You may already have PostgreSQL installed as a dependency of another piece of so
 
 Verify with: `psql --version`
 
-If the command is not found, download and install [Install PostgreSQL](https://www.postgresql.org/download/)
+If the command is not found, use your preferred package manager to install
+the software. If not packaged for your system you can
+download and [Install PostgreSQL](https://www.postgresql.org/download/)
+directly.
 
-On most Linux based operating systems PostgreSQL will get installed under user
-postgres with a default password of postgres. 
+On some Linux based operating systems PostgreSQL will get installed under user
+postgres with a default password of postgres.
 Any databases you create will also have a password with postgres as the
-password. Unless you are playing in a sandboxed environment like a VM you do
+password. Unless you are playing in a sand boxed environment like a VM you do
 not plan to keep you should change the postgres OS user password:
 
 `sudo passwd postgres`
+
+On other Linux systems, sudo model eliminates the need to directly access the
+postgres user or know its credentials.
 
 Start the PostgreSQL service if it is not running as software install does not
 guarantee service is enabled and running.
@@ -77,21 +83,46 @@ services:
 Init.d: `sudo service postgresql status`
 systemd: `sudo systemctl status postgresql@18-main.service`
 
+If the service fails to start, it's because these things are not as simple as
+often indicated and on a fresh install the installer chooses not to
+set up a container directory where your databases are managed.
+
+```
+# On a fresh Manjaro XFCE VM
+sudo pacman -S postgresql
+sudo systemctl status postgresql.service
+sudo systemctl enable postgresql.service
+sudo systemctl status postgresql.service
+sudo systemctl start postgresql.service
+sudo systemctl status postgresql.service
+
+# When service failed to start, status gives you a hint on where to find trouble-shooting information
+sudo journalctl -xeu postgresql.service
+
+# A captured message from the Postgres failed startup indicates missing data dir and how to create it:
+su -l postgres -c "initdb --locale=C.UTF-8 --encoding=UTF8 -D '/var/lib/postgres/data'"
+
+# However this is not the way for sudo based systems. When prompted, you will enter your privileged user password which will give you access to postgres user to run the command:
+sudo -u postgres initdb --locale=C.UTF-8 --encoding=UTF8 -D '/var/lib/postgres/data'
+sudo systemctl start postgresql.service && sudo systemctl status postgresql.service
+
+# You should now see the DB service running.
+```
+
 #### [Install Go Toolchain](https://go.dev/dl/)
 
 ## Configure Database (DB) and Gator
 
-With PostgreSQL server running you will need to create a DB for Gator and
-change the default password for DB which is also postgres like the
-postgres OS user.
-
+With PostgreSQL server running you will need to create a DB for Gator.
+Note: On some systems, the postgres DB user may have a default password of
+postgres applied.
 1. Access the PostgreSQL service using the basic psql client:
 `sudo -u postgres psql`
 2. From the "postgres=#" prompt:
 `CREATE DATABASE gator;`
 3. Connect to your new gator DB:
 `\c gator`
-4. Change the password for default user of your gator DB:
+4. To change or apply password for your gator DB:
 `ALTER USER postgres PASSWORD 'somethingsecret';`
 5. You are done with the DB setup so you can:
 `exit`
@@ -100,26 +131,51 @@ postgres OS user.
 ## Install Gator
 
 1. Install the executable:
-`go instal TODO`
-2. TODO: TBD on how to bootstrap the DB !!!!
-3. Create minimal Gator config:
-`echo '{"db_url":"postgres://postgres:postgres@localhost:5432/gator?sslmode=disable"}' > ~/.gatorconfig.json`
+
+   `go instal https://github.com/dragonbitestail/gator@latest`
+2. Bootstrap the Gator DB schema:
+   - Install Goose DB migration tool: `go install github.com/pressly/goose/v3/cmd/goose@latest`
+   - Find cached Gator `sql` directory which was created when you installed Gator (1):
+
+     `find ~/go -type d -name sql |grep gator`
+
+     If you have several, cd to the most recent. E.g.:
+
+     `cd /home/dbt/go/pkg/mod/github.com/dragonbitestail/gator@v0.0.0-20260925143502-a7f8580135b2/sql/schema`
+
+   - Run the migrations with Goose using an appropriate connection string:
+
+     `goose postgres "postgres://postgres:@localhost:5432/gator" up`
+
+     If all went well you should see a success message.
+3. Create minimal Gator configuration. Once, configured this is managed by
+   Gator:
+
+   `echo '{"db_url":"postgres://postgres@localhost:5432/gator?sslmode=disable"}' > ~/.gatorconfig.json`
 
 Gator should now be ready to run:
+
 `gator`
 
-# Quickstart
+# Quick start
 
 1. `gator register $USER`
 2. `gator users`
-3. `gator addfeed "Tenable Security Advisories" https://www.tenable.com/security/feed`
+3. `gator addfeed "NASA News" https://cneos.jpl.nasa.gov/feed/news.xml`
 4. Open a separate terminal window and start collecting feed posts for all
    available feeds. To start, use a small value so you can start browsing
    results:
-`gator agg 1m`
+
+   `gator agg 1m`
 5. After a few minutes, switch back to your first terminal and browse latest
    feed posts:
-`gator browse 15`
+
+   `gator browse 15`
+6. Remember to exit the aggregator when you are done testing. If you wish to
+   run it regularly, use a more reasonable value like like every 2h in the case
+   where may check feeds a few times a day:
+
+   `gator agg 2h`
 
 # Environment variables
 
@@ -127,13 +183,3 @@ To control default logging levels where WARN is the default, use LOG_LEVEL like:
  `LOG_LEVEL=info gator`
 
 Levels are those supported by the [Go slog package](https://pkg.go.dev/log/slog#Level)
-
-On Windows in cmd.exe terminal shell:
-
-`set LOG_LEVEL=info`
-
-`gator`
-
-To unset:
-
-`set LOG_LEVEL=`
