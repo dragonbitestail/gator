@@ -175,7 +175,7 @@ Gator should now be ready to run:
    `gator browse 15`
 6. Remember to exit the aggregator when you are done testing. If you wish to
    run it regularly, use a more reasonable value like like every 2h in the case
-   where may check feeds a few times a day:
+   where you may check feeds a few times a day:
 
    `gator agg 2h`
 
