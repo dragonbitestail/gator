@@ -151,7 +151,9 @@ postgres applied.
 3. Create minimal Gator configuration. Once, configured this is managed by
    Gator:
 
-   `echo '{"db_url":"postgres://postgres@localhost:5432/gator?sslmode=disable"}' > ~/.gatorconfig.json`
+   ```
+   echo '{"db_url":"postgres://postgres@localhost:5432/gator?sslmode=disable"}' > ~/.gatorconfig.json
+   ```
 
 Gator should now be ready to run:
 
